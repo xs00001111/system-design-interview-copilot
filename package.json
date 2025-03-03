@@ -1,0 +1,47 @@
+{
+  "name": "interview-copilot",
+  "version": "1.0.0",
+  "description": "AI System Design Interview Assistant",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "vite --mode development",
+    "build": "tsc -p electron && vite build && electron-builder",
+    "preview": "vite preview",
+    "lint": "eslint src --ext js,jsx --report-unused-disable-directives --max-warnings 0"
+  },
+  "keywords": [
+    "interview",
+    "system-design",
+    "ai",
+    "assistant"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@emotion/react": "^11.11.1",
+    "@emotion/styled": "^11.11.0",
+    "@mui/icons-material": "^5.14.5",
+    "@mui/material": "^5.14.5",
+    "electron": "^25.3.1",
+    "openai": "^4.86.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.15.0",
+    "socket.io-client": "^4.7.2"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.15",
+    "@types/react-dom": "^18.2.7",
+    "@vitejs/plugin-react": "^4.0.3",
+    "electron": "^25.3.1",
+    "electron-builder": "^24.6.4",
+    "eslint": "^8.45.0",
+    "eslint-plugin-react": "^7.32.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.3",
+    "typescript": "^5.0.2",
+    "vite": "^4.5.9",
+    "vite-plugin-electron": "^0.15.6",
+    "vite-plugin-electron-renderer": "^0.14.5"
+  }
+}
