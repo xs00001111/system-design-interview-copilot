@@ -1,5 +1,22 @@
 import OpenAI from 'openai';
 
+// Helper function to determine file extension based on MIME type
+const getFileExtensionFromMimeType = (mimeType) => {
+  if (!mimeType) return 'webm';
+  const mapping = {
+    'audio/webm': 'webm',
+    'audio/mp4': 'mp4',
+    'audio/m4a': 'm4a',
+    'audio/mpeg': 'mp3',
+    'audio/mp3': 'mp3',
+    'audio/ogg': 'ogg',
+    'audio/wav': 'wav',
+    'audio/flac': 'flac',
+    'audio/webm;codecs=opus': 'webm'
+  };
+  return mapping[mimeType] || 'webm';
+};
+
 /**
  * OpenAI Service utility for handling both text and audio transcription
  * using the same API key
@@ -21,11 +38,12 @@ class OpenAIService {
    */
   async transcribeAudio(audioFile) {
     try {
-      // Convert the audio blob to a File object if it's not already one
+      // Convert the audio blob to a File object if it's not already one.
+      // Use the blob’s MIME type to set a matching file extension.
       let fileToSend;
       if (audioFile instanceof Blob && !(audioFile instanceof File)) {
-        // Create a File from the Blob with a proper name and type
-        fileToSend = new File([audioFile], 'audio.webm', { type: audioFile.type || 'audio/webm' });
+        const extension = getFileExtensionFromMimeType(audioFile.type);
+        fileToSend = new File([audioFile], `audio.${extension}`, { type: audioFile.type || 'audio/webm' });
       } else {
         fileToSend = audioFile;
       }
@@ -41,7 +59,7 @@ class OpenAIService {
       throw error;
     }
   }
-
+  
   /**
    * Set up real-time transcription callback
    * @param {Function} callback - Function to call with updated transcription
@@ -61,7 +79,8 @@ class OpenAIService {
       
       // Create a blob from the last few chunks (adjust buffer size as needed)
       const recentChunks = this.transcriptionBuffer.slice(-3); // Process last 3 chunks
-      const audioBlob = new Blob(recentChunks, { type: 'audio/webm' });
+      // Use the MIME type of the incoming chunk
+      const audioBlob = new Blob(recentChunks, { type: audioChunk.type });
       
       // Transcribe the recent audio
       const transcription = await this.transcribeAudio(audioBlob);
@@ -97,7 +116,6 @@ class OpenAIService {
         model: model,
         messages: [{ role: 'user', content: prompt }],
       });
-
       return completion.choices[0].message.content;
     } catch (error) {
       console.error('Error generating text:', error);
