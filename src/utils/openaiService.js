@@ -78,12 +78,16 @@ class OpenAIService {
       this.transcriptionBuffer.push(audioChunk);
       
       // Create a blob from the last few chunks (adjust buffer size as needed)
-      const recentChunks = this.transcriptionBuffer.slice(-3); // Process last 3 chunks
+      const recentChunks = this.transcriptionBuffer.slice(-8); // Process last 8 chunks
       // Use the MIME type of the incoming chunk
       const audioBlob = new Blob(recentChunks, { type: audioChunk.type });
       
       // Transcribe the recent audio
-      const transcription = await this.transcribeAudio(audioBlob);
+      console.log('Starting audio transcription at:', new Date().toISOString());
+const transcription = await this.transcribeAudio(audioBlob);
+console.log('Completed transcription at:', new Date().toISOString(), 'Content:', transcription);
+      
+      // Clear the transcription buffer to start fresh next time
       
       // Call the update callback if set
       if (this.onTranscriptionUpdate) {

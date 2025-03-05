@@ -35,7 +35,9 @@ const InterviewSession = () => {
   const [recordingError, setRecordingError] = useState('');
   const [audioStream, setAudioStream] = useState(null);
   const [mediaRecorder, setMediaRecorder] = useState(null);
-  
+  // Change to:
+  // Change to:
+  const mediaRecorderRef = useRef(null);
   const transcriptRef = useRef(null);
   const openaiServiceRef = useRef(null);
   const debouncedProcessRef = useRef(null);
@@ -62,6 +64,8 @@ const InterviewSession = () => {
     }
   }, [transcript]);
 
+
+
   // IPC listeners for voice recording
   useEffect(() => {
     if (api) {
@@ -82,7 +86,7 @@ const InterviewSession = () => {
     }
   }, [isRecording]);
 
-  const processInterviewQuestion = (question) => {
+  const processInterviewQuestion = (question, fullTranscript) => {
     setIsProcessing(true);
     
     if (!openaiServiceRef.current) {
@@ -92,29 +96,32 @@ const InterviewSession = () => {
     }
 
     const prompt = `You are an AI assistant helping with a system design interview. 
-The current interview transcript is:
-${transcript}
-
-The latest transcription is: "${question}"
-
-Please analyze this and provide:
-1. The main topic of the interview (if clear)
-2. 3-5 helpful suggestions for answering this question
-3. 2-4 potential follow-up questions the interviewer might ask
-4. 2-4 key architecture components or patterns relevant to this design
-
-Format your response as JSON with the following structure:
-{
-  "topic": "Main topic of the interview",
-  "suggestions": ["suggestion1", "suggestion2", ...],
-  "followUpQuestions": ["question1", "question2", ...],
-  "architectureNotes": ["component1", "component2", ...]
-}`;
+  The current interview transcript is:
+  ${fullTranscript}
+  
+  The latest transcription is: "${question}"
+  
+  Please analyze this and provide:
+  1. The main topic of the interview (if clear)
+  2. 3-5 helpful suggestions for answering this question
+  3. 2-4 potential follow-up questions the interviewer might ask
+  4. 2-4 key architecture components or patterns relevant to this design
+  
+  Format your response as JSON with the following structure:
+  {
+    "topic": "Main topic of the interview",
+    "suggestions": ["suggestion1", "suggestion2", ...],
+    "followUpQuestions": ["question1", "question2", ...],
+    "architectureNotes": ["component1", "component2", ...]
+  }`;
 
     openaiServiceRef.current.generateText(prompt)
       .then(response => {
         try {
-          const parsedResponse = JSON.parse(response);
+          const jsonMatch = response.match(/\{[\s\S]*\}/);
+          if (!jsonMatch) throw new Error('Invalid JSON format');
+          const parsedResponse = JSON.parse(jsonMatch[0]);
+          if (!parsedResponse.topic || !parsedResponse.suggestions) throw new Error('Invalid response structure');
           if (parsedResponse.topic) setSessionTopic(parsedResponse.topic);
           if (parsedResponse.suggestions) setSuggestions(parsedResponse.suggestions);
           if (parsedResponse.followUpQuestions) setFollowUpQuestions(parsedResponse.followUpQuestions);
@@ -161,7 +168,7 @@ Format your response as JSON with the following structure:
       const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
       console.log("Using MIME type:", mimeType);
       const recorder = new MediaRecorder(stream, { mimeType });
-      setMediaRecorder(recorder);
+      mediaRecorderRef.current = recorder;
 
       const debounce = (func, wait) => {
         let timeout;
@@ -184,7 +191,11 @@ Format your response as JSON with the following structure:
         openaiServiceRef.current.clearTranscriptionBuffer();
         openaiServiceRef.current.setTranscriptionCallback((text) => {
           if (text && text.trim()) {
-            console.log('Real-time transcript update:', text);
+            console.log('Real-time transcript update:', {
+              text: text,
+              timestamp: Date.now(),
+              prevTranscriptLength: transcript.length
+            });
             setTranscript(prev => prev + '\nYou: ' + text);
           }
         });
@@ -236,24 +247,37 @@ Format your response as JSON with the following structure:
 
       // Set up a timer to process intermediate transcription every 15 seconds.
       transcriptionIntervalRef.current = setInterval(async () => {
-        if (chunks.length > 0) {
-          const currentChunks = [...chunks];
-          chunks.length = 0; // Clear the array for the next 15-sec period
-          const audioBlob = new Blob(currentChunks, { type: mimeType });
+        console.log('15-second interval processing');
+
+        // Only process if we're still recording
+        if (true) {
+          console.log("Recording!!!")
+          // Stop current recording to process accumulated audio
+          stopRecording();
+          
+          // Convert accumulated chunks into a Blob for transcription
+          const audioBlob = new Blob(chunks, { type: mimeType });
+          setIsTranscribing(true);
+          console.log("start transcribing");
           try {
-            setIsTranscribing(true);
-            const intermediateTrans = await openaiServiceRef.current.processAudioChunk(audioBlob);
-            console.log("15 sec transcription:", intermediateTrans);
-            setTranscript(prev => prev + '\nIntermediate (15 sec): ' + intermediateTrans);
-            processInterviewQuestion(intermediateTrans);
+            const intermediateTranscription = await openaiServiceRef.current.transcribeAudio(audioBlob);
+            console.log('15 second interval transcription:', intermediateTranscription);
+            
+            if (intermediateTranscription && intermediateTranscription.trim()) {
+              setTranscript(prev => prev + '\n[Interval]: ' + intermediateTranscription);
+              processInterviewQuestion(intermediateTranscription, transcript);
+            }
           } catch (error) {
-            console.error("Error transcribing intermediate audio:", error);
+            console.error('Error transcribing interval audio:', error);
+            setRecordingError(`Failed to transcribe audio: ${error.message || 'Please try again.'}`);
           } finally {
             setIsTranscribing(false);
           }
+          
+          // Start a new recording session
+          startRecording();
         }
-      }, 15000);
-
+      }, 15000); // 15 second intervals
     } catch (error) {
       console.error('Error accessing microphone:', error);
       if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
@@ -273,11 +297,10 @@ Format your response as JSON with the following structure:
   };
 
   const stopRecording = () => {
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-      mediaRecorder.stop();
-      audioStream.getTracks().forEach(track => track.stop());
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      audioStream?.getTracks()?.forEach(track => track.stop());
       setIsRecording(false);
-      setMediaRecorder(null);
       setAudioStream(null);
       if (transcriptionIntervalRef.current) {
         clearInterval(transcriptionIntervalRef.current);
